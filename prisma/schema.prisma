@@ -1,0 +1,182 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  ADMIN
+  BUSINESS_OWNER
+}
+
+enum ClaimStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  CONVERTED
+  ARCHIVED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  INCOMPLETE
+  INCOMPLETE_EXPIRED
+  TRIALING
+  UNPAID
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  emailVerified DateTime?
+  image         String?
+  role          Role      @default(BUSINESS_OWNER)
+  businessId    String?
+  business      Business? @relation("BusinessOwners", fields: [businessId], references: [id])
+  passwordHash  String?
+
+  accounts  Account[]
+  sessions  Session[]
+  claims    Claim[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Business {
+  id           String   @id @default(cuid())
+  name         String
+  category     String?
+  phone        String?
+  email        String?
+  address      String?
+  city         String?
+  state        String?
+  zip          String?
+  description  String?  @db.Text
+  hours        Json?    @default("{}")
+  website      String?
+  claimed      Boolean  @default(false)
+  generatedAt  DateTime @default(now())
+  slug         String   @unique
+  source       String?
+  rating       Float?
+  reviewsCount Int      @default(0)
+  photos       Json?    @default("[]")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  leads        Lead[]
+  websites     Website[]
+  owners       User[]        @relation("BusinessOwners")
+  claims       Claim[]
+  subscription Subscription?
+}
+
+model Lead {
+  id           String     @id @default(cuid())
+  businessId   String
+  customerName String
+  email        String?
+  phone        String?
+  message      String?    @db.Text
+  serviceType  String?
+  status       LeadStatus @default(NEW)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+}
+
+model Website {
+  id              String   @id @default(cuid())
+  businessId      String   @unique
+  seoTitle        String?
+  seoDescription  String?  @db.Text
+  heroHeadline    String?
+  heroSubheadline String?
+  content         Json?    @default("{}")
+  published       Boolean  @default(false)
+  theme           Json?    @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+}
+
+model Claim {
+  id                 String      @id @default(cuid())
+  businessId         String
+  userId             String?
+  status             ClaimStatus @default(PENDING)
+  verificationMethod String?
+  createdAt          DateTime    @default(now())
+  verifiedAt         DateTime?
+  updatedAt          DateTime    @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user     User?    @relation(fields: [userId], references: [id])
+}
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  businessId           String             @unique
+  planId               String
+  stripeCustomerId     String?
+  stripeSubscriptionId String?            @unique
+  stripePriceId        String?
+  status               SubscriptionStatus @default(INCOMPLETE)
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean            @default(false)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+}
