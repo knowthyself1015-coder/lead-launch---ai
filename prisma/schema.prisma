@@ -3,9 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
+  provider = "sqlite"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  
 }
 
 enum Role {
@@ -60,12 +60,12 @@ model Account {
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
+  refresh_token     String?
+  access_token      String?
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String? @db.Text
+  id_token          String?
   session_state     String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -99,8 +99,8 @@ model Business {
   city         String?
   state        String?
   zip          String?
-  description  String?  @db.Text
-  hours        Json?    @default("{}")
+  description  String? 
+  hours        String?
   website      String?
   claimed      Boolean  @default(false)
   generatedAt  DateTime @default(now())
@@ -108,7 +108,7 @@ model Business {
   source       String?
   rating       Float?
   reviewsCount Int      @default(0)
-  photos       Json?    @default("[]")
+  photos       String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -125,7 +125,7 @@ model Lead {
   customerName String
   email        String?
   phone        String?
-  message      String?    @db.Text
+  message      String?   
   serviceType  String?
   status       LeadStatus @default(NEW)
   createdAt    DateTime   @default(now())
@@ -138,12 +138,12 @@ model Website {
   id              String   @id @default(cuid())
   businessId      String   @unique
   seoTitle        String?
-  seoDescription  String?  @db.Text
+  seoDescription  String? 
   heroHeadline    String?
   heroSubheadline String?
-  content         Json?    @default("{}")
+  content         String?
   published       Boolean  @default(false)
-  theme           Json?    @default("{}")
+  theme           String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
