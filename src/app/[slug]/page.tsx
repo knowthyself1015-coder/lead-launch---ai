@@ -1,3 +1,4 @@
+import { ClaimButton } from "@/components/claim-button";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
@@ -8,9 +9,32 @@ interface Props {
 }
 
 interface WebsiteContent {
-  about?: string;
-  services?: { title: string; description: string }[];
-  faq?: { question: string; answer: string }[];
+  hero?: {
+    headlines: string[];
+    subheadline: string;
+    cta_text: string;
+  };
+  about?: {
+    about_paragraph: string;
+    history?: string;
+    mission_statement: string;
+    values?: string[];
+  };
+  services?: {
+    services: { name: string; description: string; category?: string }[];
+    heading: string;
+  };
+  faq?: {
+    faqs: { question: string; answer: string }[];
+    heading: string;
+  };
+  seo?: {
+    seo_title: string;
+    meta_description: string;
+    keywords: string[];
+    og_title: string;
+    og_description: string;
+  };
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -22,14 +46,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!business) return { title: "Not Found" };
 
   const website = business.websites[0];
+  const seo = (website?.content as WebsiteContent)?.seo;
   return {
-    title: website?.seoTitle || business.name,
+    title: seo?.seo_title || website?.seoTitle || business.name,
     description:
+      seo?.meta_description ||
       website?.seoDescription ||
       `Contact ${business.name} — ${business.city || "local"} business`,
+    keywords: seo?.keywords,
     openGraph: {
-      title: website?.seoTitle || business.name,
-      description: website?.seoDescription || undefined,
+      title: seo?.og_title || website?.seoTitle || business.name,
+      description: seo?.og_description || website?.seoDescription || undefined,
       type: "website",
     },
   };
@@ -44,11 +71,14 @@ export default async function BusinessWebsitePage({ params }: Props) {
   if (!business) notFound();
 
   const website = business.websites[0];
-  const content = (website?.content as WebsiteContent) ?? {};
-  const theme = (website?.theme as Record<string, string>) ?? {};
+  const content = (website?.content ? JSON.parse(website.content) : {}) as WebsiteContent;
+  const theme = (website?.theme ? JSON.parse(website.theme) : {}) as Record<string, string>;
   const accentColor = theme.accentColor || "#2563eb";
-  const services = content.services ?? [];
-  const faq = content.faq ?? [];
+  const services = content.services?.services ?? [];
+  const faqItems = content.faq?.faqs ?? [];
+  const heroHeadline = content.hero?.headlines?.[0] || website?.heroHeadline || business.name;
+  const heroSubheadline = content.hero?.subheadline || website?.heroSubheadline || "";
+  const aboutText = content.about?.about_paragraph || business.description || "";
 
   return (
     <div className="min-h-screen">
@@ -59,11 +89,11 @@ export default async function BusinessWebsitePage({ params }: Props) {
       >
         <div className="mx-auto max-w-3xl">
           <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
-            {website?.heroHeadline || business.name}
+            {heroHeadline}
           </h1>
-          {website?.heroSubheadline && (
+          {heroSubheadline && (
             <p className="mt-4 text-lg text-muted-foreground">
-              {website.heroSubheadline}
+              {heroSubheadline}
             </p>
           )}
           <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
@@ -96,7 +126,7 @@ export default async function BusinessWebsitePage({ params }: Props) {
         <div className="text-center">
           <h2 className="text-3xl font-bold">About {business.name}</h2>
           <div className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground leading-relaxed">
-            <p>{content.about || business.description || "Professional service dedicated to quality and customer satisfaction."}</p>
+            <p>{aboutText || "Professional service dedicated to quality and customer satisfaction."}</p>
           </div>
         </div>
 
@@ -150,7 +180,7 @@ export default async function BusinessWebsitePage({ params }: Props) {
       {services.length > 0 && (
         <section className="border-t border-border px-4 py-16">
           <div className="mx-auto max-w-6xl">
-            <h2 className="text-center text-3xl font-bold">Our Services</h2>
+            <h2 className="text-center text-3xl font-bold">{content.services?.heading || "Our Services"}</h2>
             <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {services.map((service, i) => (
                 <div key={i} className="group rounded-xl border border-border p-6 transition hover:shadow-md">
@@ -160,7 +190,7 @@ export default async function BusinessWebsitePage({ params }: Props) {
                   >
                     {i + 1}
                   </div>
-                  <h3 className="mt-4 font-semibold">{service.title}</h3>
+                  <h3 className="mt-4 font-semibold">{service.name}</h3>
                   <p className="mt-2 text-sm text-muted-foreground">{service.description}</p>
                 </div>
               ))}
@@ -170,12 +200,12 @@ export default async function BusinessWebsitePage({ params }: Props) {
       )}
 
       {/* FAQ Section - AI generated */}
-      {faq.length > 0 && (
+      {faqItems.length > 0 && (
         <section className="border-t border-border px-4 py-16">
           <div className="mx-auto max-w-3xl">
-            <h2 className="text-center text-3xl font-bold">Frequently Asked Questions</h2>
+            <h2 className="text-center text-3xl font-bold">{content.faq?.heading || "Frequently Asked Questions"}</h2>
             <div className="mt-10 space-y-4">
-              {faq.map((item, i) => (
+              {faqItems.map((item, i) => (
                 <details key={i} className="group rounded-xl border border-border">
                   <summary className="flex cursor-pointer items-center justify-between px-6 py-4 font-medium">
                     {item.question}
@@ -253,7 +283,16 @@ export default async function BusinessWebsitePage({ params }: Props) {
         </div>
       </section>
 
-      {/* Footer */}
+      {/* Claim Section */}
+          {!business.claimed && (
+            <ClaimButton
+              businessId={business.id}
+              businessName={business.name}
+              businessSlug={business.slug}
+            />
+          )}
+
+          {/* Footer */}
       <footer className="border-t border-border px-4 py-6 text-center text-sm text-muted-foreground">
         <p>
           &copy; {new Date().getFullYear()} {business.name}. All rights reserved.

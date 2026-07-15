@@ -28,6 +28,7 @@ export async function POST(
     }
 
     // Map Prisma Business to the generator's BusinessContext
+    const hours = business.hours as Record<string, string> | null;
     const ctx: BusinessContext = {
       name: business.name,
       category: business.category || "General",
@@ -37,7 +38,7 @@ export async function POST(
       phone: business.phone || undefined,
       address: business.address || undefined,
       zip: business.zip || undefined,
-      hours: business.hours as Record<string, string> | undefined,
+      hours: hours ?? undefined,
       source: business.source || undefined,
       rating: business.rating || undefined,
       review_count: business.reviewsCount || undefined,
@@ -55,17 +56,15 @@ export async function POST(
         seoDescription: content.seo.meta_description,
         heroHeadline: content.hero.headlines[0] || business.name,
         heroSubheadline: content.hero.subheadline,
-        content: {
+        content: JSON.stringify({
           hero: content.hero,
           about: content.about,
           services: content.services,
           faq: content.faq,
           seo: content.seo,
-        },
+        }),
         published: true,
-        theme: {
-          hue: "240",
-        },
+        theme: JSON.stringify({ hue: "240" }),
       },
     });
 

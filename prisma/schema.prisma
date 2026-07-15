@@ -36,6 +36,20 @@ enum SubscriptionStatus {
   UNPAID
 }
 
+enum CampaignType {
+  EMAIL
+  SMS
+  SOCIAL
+  REVIEW_REQUEST
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+}
+
 model User {
   id            String    @id @default(cuid())
   email         String    @unique
@@ -117,6 +131,7 @@ model Business {
   owners       User[]        @relation("BusinessOwners")
   claims       Claim[]
   subscription Subscription?
+  campaigns    Campaign[]
 }
 
 model Lead {
@@ -179,4 +194,37 @@ model Subscription {
   updatedAt            DateTime           @updatedAt
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+}
+
+model Campaign {
+  id              String         @id @default(cuid())
+  businessId      String
+  name            String
+  type            CampaignType
+  status          CampaignStatus @default(DRAFT)
+  targetAudience  String?
+  message         String?
+  schedule        DateTime?
+  sentCount       Int            @default(0)
+  openedCount     Int            @default(0)
+  convertedCount  Int            @default(0)
+  templateId      String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+}
+
+model CampaignTemplate {
+  id              String       @id @default(cuid())
+  name            String
+  category        String
+  type            CampaignType
+  subject         String?
+  body            String?
+  defaultMessage  String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([category])
 }

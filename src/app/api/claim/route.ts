@@ -4,11 +4,26 @@ import { prisma } from "@/lib/prisma";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+
+    // Look up or create a user by email for the claim
+    let userId: string | undefined;
+    if (body.email) {
+      const user = await prisma.user.upsert({
+        where: { email: body.email },
+        update: {},
+        create: {
+          email: body.email,
+          name: body.email.split("@")[0],
+        },
+      });
+      userId = user.id;
+    }
+
     const claim = await prisma.claim.create({
       data: {
         businessId: body.businessId,
-        userId: body.userId,
-        verificationMethod: body.verificationMethod,
+        userId: userId ?? body.userId,
+        verificationMethod: body.verificationMethod ?? "email",
         status: "PENDING",
       },
     });
