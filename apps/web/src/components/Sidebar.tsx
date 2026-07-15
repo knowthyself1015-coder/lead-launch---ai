@@ -1,8 +1,11 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { signOut } from 'next-auth/react';
+import { signOut, useSession } from 'next-auth/react';
+
+// ── Navigation items ──
 
 const navItems = [
   {
@@ -15,29 +18,74 @@ const navItems = [
     ),
   },
   {
-    label: 'Create Content',
-    href: '/workspace',
+    label: 'Products',
+    href: '/products',
     icon: (
       <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z" />
       </svg>
     ),
   },
   {
-    label: 'History',
-    href: '/workspace?tab=history',
+    label: 'AI Writer',
+    href: '/writer',
     icon: (
       <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
       </svg>
     ),
   },
   {
-    label: 'Profile',
-    href: '/profile',
+    label: 'Video Creator',
+    href: '/video',
     icon: (
       <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" />
+      </svg>
+    ),
+  },
+  {
+    label: 'Image Creator',
+    href: '/images',
+    icon: (
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0 0 22.5 18.75V5.25A2.25 2.25 0 0 0 20.25 3H3.75A2.25 2.25 0 0 0 1.5 5.25v13.5A2.25 2.25 0 0 0 3.75 21Zm16.5-6.75h.008v.008h-.008v-.008Z" />
+      </svg>
+    ),
+  },
+  {
+    label: 'Social Templates',
+    href: '/templates',
+    icon: (
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 4.5v15m6-15v15m-10.875 0h15.75c.621 0 1.125-.504 1.125-1.125V5.625c0-.621-.504-1.125-1.125-1.125H4.125C3.504 4.5 3 5.004 3 5.625v12.75c0 .621.504 1.125 1.125 1.125Z" />
+      </svg>
+    ),
+  },
+  {
+    label: 'Campaigns',
+    href: '/campaigns',
+    icon: (
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5m.75-9 3-3 2.148 2.148A12.061 12.061 0 0 1 16.5 7.605" />
+      </svg>
+    ),
+  },
+  {
+    label: 'Affiliate Links',
+    href: '/affiliate',
+    icon: (
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
+      </svg>
+    ),
+  },
+  {
+    label: 'Analytics',
+    href: '/analytics',
+    icon: (
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
       </svg>
     ),
   },
@@ -53,51 +101,116 @@ const navItems = [
   },
 ];
 
+// ── Tier badge colors ──
+
+const tierStyles: Record<string, string> = {
+  free: 'bg-gray-100 text-gray-700',
+  creator: 'bg-blue-100 text-blue-700',
+  pro: 'bg-purple-100 text-purple-700',
+  agency: 'bg-amber-100 text-amber-700',
+};
+
 export default function Sidebar() {
   const pathname = usePathname();
+  const { data: session } = useSession();
+  const [collapsed, setCollapsed] = useState(false);
+
+  // Close sidebar on route change (mobile)
+  useEffect(() => {
+    setCollapsed(true);
+  }, [pathname]);
+
+  const user = session?.user as any;
+  const tier = user?.tier || 'free';
+  const initials = user?.name
+    ? user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
+    : user?.email?.[0]?.toUpperCase() || '?';
 
   return (
-    <aside className="w-64 min-h-screen bg-white border-r border-gray-200 flex flex-col">
-      {/* Logo */}
-      <div className="h-16 flex items-center px-6 border-b border-gray-200">
-        <Link href="/dashboard" className="text-lg font-bold text-brand-700">
-          AffiliateContent AI
-        </Link>
-      </div>
+    <>
+      {/* Mobile overlay */}
+      {!collapsed && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          onClick={() => setCollapsed(true)}
+        />
+      )}
 
-      {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
-        {navItems.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-brand-50 text-brand-700'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-              }`}
+      {/* Sidebar */}
+      <aside
+        className={`fixed top-0 left-0 z-50 h-full bg-white border-r border-gray-200 flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:z-auto ${
+          collapsed ? '-translate-x-full' : 'translate-x-0'
+        } w-64`}
+      >
+        {/* Header: user avatar + tier */}
+        <div className="h-16 flex items-center gap-3 px-4 border-b border-gray-200">
+          <div className="h-8 w-8 rounded-full bg-brand-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
+            {initials}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-gray-900 truncate">
+              {user?.name || user?.email || 'User'}
+            </p>
+            <span
+              className={`inline-block text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded-full ${tierStyles[tier] || tierStyles.free}`}
             >
-              {item.icon}
-              {item.label}
-            </Link>
-          );
-        })}
-      </nav>
+              {tier}
+            </span>
+          </div>
+        </div>
 
-      {/* Sign out */}
-      <div className="p-3 border-t border-gray-200">
-        <button
-          onClick={() => signOut({ redirectTo: '/' })}
-          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
-        >
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
+        {/* Navigation */}
+        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+          {navItems.map((item) => {
+            const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setCollapsed(true)}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'bg-brand-50 text-brand-700'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                }`}
+              >
+                {item.icon}
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* Sign out */}
+        <div className="p-3 border-t border-gray-200">
+          <button
+            onClick={() => signOut({ redirectTo: '/' })}
+            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
+            </svg>
+            Sign out
+          </button>
+        </div>
+      </aside>
+
+      {/* Hamburger toggle — fixed to viewport */}
+      <button
+        onClick={() => setCollapsed(!collapsed)}
+        className="fixed top-4 left-4 z-50 lg:hidden p-2 rounded-lg bg-white border border-gray-200 shadow-sm hover:bg-gray-50 transition-colors"
+        aria-label={collapsed ? 'Open sidebar' : 'Close sidebar'}
+      >
+        {collapsed ? (
+          <svg className="h-6 w-6 text-gray-700" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
           </svg>
-          Sign out
-        </button>
-      </div>
-    </aside>
+        ) : (
+          <svg className="h-6 w-6 text-gray-700" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+          </svg>
+        )}
+      </button>
+    </>
   );
 }
