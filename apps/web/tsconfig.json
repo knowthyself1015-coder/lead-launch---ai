@@ -8,6 +8,7 @@
     "moduleResolution": "bundler",
     "allowJs": true,
     "noEmit": true,
+    "declaration": false,
     "incremental": true,
     "paths": {
       "@/*": ["./src/*"]

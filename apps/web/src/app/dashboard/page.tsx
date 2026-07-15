@@ -1,15 +1,12 @@
-import { auth, signOut } from '@/lib/auth';
-import { redirect } from 'next/navigation';
 import { prisma } from '@affiliate/db';
+import { auth } from '@/lib/auth';
 
 export default async function DashboardPage() {
   const session = await auth();
-
-  if (!session?.user) redirect('/login');
-  if (!(session.user as any).onboardingCompleted) redirect('/onboarding');
+  const userId = (session?.user as any)?.id as string;
 
   const user = await prisma.user.findUnique({
-    where: { id: (session.user as any).id },
+    where: { id: userId },
     select: {
       name: true,
       email: true,
@@ -17,31 +14,18 @@ export default async function DashboardPage() {
       trackingId: true,
       tier: true,
       createdAt: true,
-      onboardingCompleted: true,
     },
   });
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-10">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600 mt-1">Welcome{user?.name ? `, ${user.name}` : ''}!</p>
-        </div>
-        <form
-          action={async () => {
-            'use server';
-            await signOut({ redirectTo: '/' });
-          }}
-        >
-          <button type="submit" className="btn-secondary text-sm">
-            Sign out
-          </button>
-        </form>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+        <p className="text-gray-600 mt-1">Welcome{user?.name ? `, ${user.name}` : ''}!</p>
       </div>
 
       {/* Account Info */}
-      <section className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+      <section className="bg-white rounded-xl border border-gray-200 p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Account</h2>
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
@@ -62,7 +46,7 @@ export default async function DashboardPage() {
       </section>
 
       {/* Affiliate Info */}
-      <section className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+      <section className="bg-white rounded-xl border border-gray-200 p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Amazon Associates</h2>
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
