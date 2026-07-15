@@ -1,0 +1,67 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  passwordHash  String?
+  avatarUrl     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Affiliate tracking
+  affiliateTag  String?
+  trackingId    String?
+
+  // Subscription
+  tier          String    @default("free") // free | creator | pro | agency
+  stripeCustomerId String?
+  stripeSubscriptionId String?
+
+  // Content generations
+  generations   Generation[]
+
+  @@map("users")
+}
+
+model Product {
+  id          String    @id @default(cuid())
+  asin        String    @unique
+  title       String
+  description String?
+  imageUrl    String?
+  price       String?
+  category    String?
+  url         String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  generations   Generation[]
+
+  @@map("products")
+}
+
+model Generation {
+  id          String    @id @default(cuid())
+  type        String    // script | thumbnail | video | caption | social_post
+  status      String    @default("pending") // pending | processing | completed | failed
+  platform    String?   // youtube | tiktok | instagram | pinterest | blog
+  inputData   Json?
+  outputData  Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  productId   String?
+  product     Product?  @relation(fields: [productId], references: [id])
+
+  @@map("generations")
+}

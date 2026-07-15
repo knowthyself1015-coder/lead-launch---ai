@@ -1,0 +1,21 @@
+{
+  "name": "@affiliate/db",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "generate": "prisma generate",
+    "push": "prisma db push",
+    "studio": "prisma studio",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.0",
+    "prisma": "^5.19.0",
+    "typescript": "^5.5.4"
+  }
+}
