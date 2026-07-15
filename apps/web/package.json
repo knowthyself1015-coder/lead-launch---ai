@@ -9,8 +9,8 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@affiliate/db": "*",
-    "@affiliate/shared": "*",
+    "@affiliate/db": "workspace:*",
+    "@affiliate/shared": "workspace:*",
     "next": "^14.2.15",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
