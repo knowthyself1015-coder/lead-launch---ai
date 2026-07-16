@@ -157,7 +157,7 @@ router.get("/", async (_req: Request, res: Response) => {
 
 router.get("/:asin", async (req: Request, res: Response) => {
   try {
-    const asin = req.params.asin.toUpperCase();
+    const asin = (req.params.asin || '').toUpperCase();
 
     if (!/^[A-Z0-9]{10}$/.test(asin)) {
       return res.status(400).json({
