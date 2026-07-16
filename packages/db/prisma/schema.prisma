@@ -57,9 +57,14 @@ model User {
   trackingId    String?
 
   // Subscription
-  tier          String    @default("free") // free | creator | pro | agency
-  stripeCustomerId String?
-  stripeSubscriptionId String?
+  tier                        String    @default("free") // free | creator | pro | agency
+  stripeCustomerId            String?
+  stripeSubscriptionId        String?
+  subscriptionStatus          String?   // active | past_due | canceled | incomplete | trialing
+  subscriptionCurrentPeriodEnd DateTime?
+  cancelAtPeriodEnd           Boolean   @default(false)
+  generationsUsedThisMonth    Int       @default(0)
+  generationsResetDate        DateTime?
 
   // Relations
   accounts      Account[]

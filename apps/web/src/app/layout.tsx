@@ -25,6 +25,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   AffiliateContent AI
                 </Link>
                 <div className="flex items-center gap-4">
+                  <Link href="/pricing" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">
+                    Pricing
+                  </Link>
                   <Link href="/login" className="btn-secondary text-sm">
                     Log in
                   </Link>
