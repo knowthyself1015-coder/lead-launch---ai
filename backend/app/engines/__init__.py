@@ -1,5 +1,12 @@
 from app.engines.scanner import scan_market
-from app.engines.sentiment import analyze_sentiment
+from app.engines.sentiment import (
+    analyze_news,
+    analyze_batch,
+    get_market_sentiment,
+    analyze_sentiment,
+    SentimentResult,
+    NewsItem,
+)
 from app.engines.technicals import analyze_technicals
 from app.engines.risk import assess_risk, calculate_position_size
 from app.engines.scoring import score_candidate
@@ -10,7 +17,12 @@ from app.engines.reports import generate_daily_report, get_reports
 
 __all__ = [
     "scan_market",
+    "analyze_news",
+    "analyze_batch",
+    "get_market_sentiment",
     "analyze_sentiment",
+    "SentimentResult",
+    "NewsItem",
     "analyze_technicals",
     "assess_risk",
     "calculate_position_size",
