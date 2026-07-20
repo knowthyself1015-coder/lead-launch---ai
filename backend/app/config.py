@@ -34,6 +34,12 @@ class Settings:
     # AI / LLM — OpenAI
     # -----------------------------------------------------------
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
+    # -----------------------------------------------------------
+    # Sentiment
+    # -----------------------------------------------------------
+    SENTIMENT_CONFIDENCE_THRESHOLD: float = float(os.getenv("SENTIMENT_CONFIDENCE_THRESHOLD", "0.6"))
 
     # -----------------------------------------------------------
     # Database
