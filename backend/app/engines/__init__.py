@@ -1,7 +1,17 @@
 from app.engines.scanner import scan_market
 from app.engines.sentiment import analyze_sentiment
 from app.engines.technicals import analyze_technicals
-from app.engines.risk import assess_risk, calculate_position_size
+from app.engines.risk import (
+    RiskParams,
+    TradeCheck,
+    DailyRiskState,
+    calculate_position_size,
+    calculate_stop_loss,
+    calculate_take_profit,
+    check_trade,
+    update_daily_state,
+    reset_daily_state,
+)
 from app.engines.scoring import score_candidate
 from app.engines.decisions import evaluate_signal
 from app.engines.portfolio import get_portfolio_snapshot, sync_positions
@@ -12,8 +22,15 @@ __all__ = [
     "scan_market",
     "analyze_sentiment",
     "analyze_technicals",
-    "assess_risk",
+    "RiskParams",
+    "TradeCheck",
+    "DailyRiskState",
     "calculate_position_size",
+    "calculate_stop_loss",
+    "calculate_take_profit",
+    "check_trade",
+    "update_daily_state",
+    "reset_daily_state",
     "score_candidate",
     "evaluate_signal",
     "get_portfolio_snapshot",
