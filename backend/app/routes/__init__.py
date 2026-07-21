@@ -4,6 +4,8 @@ from app.routes.stocks import router as stocks_router
 from app.routes.portfolio import router as portfolio_router
 from app.routes.reports import router as reports_router
 from app.routes.scanner import router as scanner_router
+from app.routes.pipeline import router as pipeline_router
+from app.routes.traders_mind import router as traders_mind_router
 
 __all__ = [
     "health_router",
@@ -12,4 +14,6 @@ __all__ = [
     "portfolio_router",
     "reports_router",
     "scanner_router",
+    "pipeline_router",
+    "traders_mind_router",
 ]

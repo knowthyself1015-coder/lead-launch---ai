@@ -87,6 +87,38 @@ export interface Health {
   environment: string;
 }
 
+export interface PipelineStatus {
+  pipeline: {
+    running: boolean;
+  };
+  last_run: {
+    run_id: string;
+    started_at: string | null;
+    completed_at: string | null;
+    status: string | null;
+    symbols_scanned: number;
+    signals_generated: number;
+    trades_executed: number;
+    error_count: number;
+  } | null;
+  market: {
+    is_open: boolean;
+    reason: string;
+    current_time_et: string;
+  };
+}
+
+export interface PipelineRunResult {
+  status: string;
+  run_id: string;
+  started_at: string;
+  completed_at: string | null;
+  symbols_scanned: number;
+  signals_generated: number;
+  trades_executed: number;
+  errors: string[];
+}
+
 // -----------------------------------------------------------
 // API functions
 // -----------------------------------------------------------
@@ -125,5 +157,117 @@ export const api = {
   reports: {
     list: (limit?: number) => request<DailyReport[]>("/reports", { params: { limit } }),
     latest: () => request<DailyReport>("/reports/latest"),
+  },
+
+  pipeline: {
+    status: () => request<PipelineStatus>("/pipeline/status"),
+    start: (intervalSeconds?: number) =>
+      request<{ status: string; message: string }>("/pipeline/start", {
+        method: "POST",
+        params: intervalSeconds ? { interval_seconds: intervalSeconds } : undefined,
+      }),
+    stop: () =>
+      request<{ status: string; message: string }>("/pipeline/stop", {
+        method: "POST",
+      }),
+    runOnce: () =>
+      request<PipelineRunResult>("/pipeline/run-once", {
+        method: "POST",
+      }),
+    history: (limit?: number) =>
+      request<{
+        total: number;
+        runs: Array<{
+          run_id: string;
+          started_at: string;
+          completed_at: string | null;
+          status: string;
+          symbols_scanned: number;
+          signals_generated: number;
+          trades_executed: number;
+          error_count: number;
+          errors: string[];
+        }>;
+      }>("/pipeline/history", { params: { limit } }),
+    marketStatus: () => request<{ is_open: boolean; reason: string; current_time_et: string }>("/pipeline/market-status"),
+  },
+
+  tradersMind: {
+    regime: () =>
+      request<{
+        regime: string;
+        vix_level: number;
+        trend_strength: number;
+        description: string;
+        implications: string[];
+        config: {
+          score_threshold: number;
+          risk_per_trade_pct: number;
+          min_confluence: number;
+          max_positions: number;
+        };
+      }>("/traders-mind/regime"),
+
+    confluence: (symbol: string) =>
+      request<{
+        symbol: string;
+        regime: string;
+        confluence_count: number;
+        required: number;
+        passed: boolean;
+        active_signals: string[];
+        missing_signals: string[];
+      }>(`/traders-mind/confluence/${symbol}`),
+
+    sitOut: () =>
+      request<{
+        sit_out: boolean;
+        reason: string;
+        suggested_action: string;
+        regime: string;
+        daily_pnl_pct: number;
+        consecutive_losses: number;
+      }>("/traders-mind/sit-out"),
+
+    journal: (limit?: number) =>
+      request<{
+        total: number;
+        trades: Array<{
+          trade_id: string;
+          ticker: string;
+          entry_date: string;
+          exit_date: string | null;
+          direction: string;
+          entry_price: number;
+          exit_price: number | null;
+          quantity: number;
+          pnl: number | null;
+          pnl_pct: number | null;
+          regime: string | null;
+          confluence_count: number;
+          entry_reasoning: string;
+          exit_reason: string;
+        }>;
+      }>("/traders-mind/journal", { params: { limit } }),
+
+    journalStats: () =>
+      request<{
+        total_trades: number;
+        winning_trades: number;
+        losing_trades: number;
+        win_rate: number;
+        avg_hold_hours: number;
+        win_rate_by_regime: Record<string, number>;
+        win_rate_by_confluence: Record<string, number>;
+        win_rate_by_dow: Record<string, number>;
+        best_performer: string | null;
+        worst_performer: string | null;
+      }>("/traders-mind/journal/stats"),
+
+    journalLessons: () =>
+      request<{
+        lessons: string[];
+        count: number;
+      }>("/traders-mind/journal/lessons"),
   },
 };

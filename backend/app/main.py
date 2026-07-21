@@ -7,7 +7,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.database import engine, Base
 from app.redis import get_redis, close_redis
-from app.routes import health_router, signals_router, stocks_router, portfolio_router, reports_router, scanner_router
+from app.routes import (
+    health_router, signals_router, stocks_router, portfolio_router,
+    reports_router, scanner_router, pipeline_router, traders_mind_router,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +62,8 @@ def create_app() -> FastAPI:
     app.include_router(portfolio_router, prefix="/api/v1")
     app.include_router(reports_router, prefix="/api/v1")
     app.include_router(scanner_router, prefix="/api/v1")
+    app.include_router(pipeline_router, prefix="/api/v1")
+    app.include_router(traders_mind_router, prefix="/api/v1")
 
     return app
 
