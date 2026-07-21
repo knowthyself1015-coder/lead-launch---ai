@@ -2,19 +2,26 @@
 
 import { useEffect, useState } from "react";
 import TradingViewChart from "@/components/TradingViewChart";
-import { api, Signal, Health } from "@/lib/api";
+import { api, Signal, Health, PipelineStatus } from "@/lib/api";
 
 export default function Dashboard() {
   const [health, setHealth] = useState<Health | null>(null);
   const [signals, setSignals] = useState<Signal[]>([]);
+  const [pipeline, setPipeline] = useState<PipelineStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     async function load() {
       try {
-        const [h, s] = await Promise.all([api.health(), api.signals.list()]);
+        const [h, s, p] = await Promise.all([
+          api.health(),
+          api.signals.list(),
+          api.pipeline.status(),
+        ]);
         setHealth(h);
         setSignals(s);
+        setPipeline(p);
       } catch (err) {
         console.error("Failed to fetch dashboard data:", err);
       } finally {
@@ -22,7 +29,54 @@ export default function Dashboard() {
       }
     }
     load();
+    // Poll pipeline status every 15s
+    const poll = setInterval(async () => {
+      try {
+        const p = await api.pipeline.status();
+        setPipeline(p);
+      } catch {}
+    }, 15000);
+    return () => clearInterval(poll);
   }, []);
+
+  async function handleStart() {
+    setActionLoading(true);
+    try {
+      await api.pipeline.start();
+      const p = await api.pipeline.status();
+      setPipeline(p);
+    } catch (err) {
+      console.error("Failed to start pipeline:", err);
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleStop() {
+    setActionLoading(true);
+    try {
+      await api.pipeline.stop();
+      const p = await api.pipeline.status();
+      setPipeline(p);
+    } catch (err) {
+      console.error("Failed to stop pipeline:", err);
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleRunOnce() {
+    setActionLoading(true);
+    try {
+      await api.pipeline.runOnce();
+      const p = await api.pipeline.status();
+      setPipeline(p);
+    } catch (err) {
+      console.error("Failed to run pipeline:", err);
+    } finally {
+      setActionLoading(false);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -43,6 +97,16 @@ export default function Dashboard() {
         <StatCard label="Daily P&L" value="$0.00" color="emerald" />
         <StatCard label="Win Rate" value="—" color="amber" />
       </div>
+
+      {/* Pipeline status */}
+      <PipelineCard
+        pipeline={pipeline}
+        loading={loading}
+        actionLoading={actionLoading}
+        onStart={handleStart}
+        onStop={handleStop}
+        onRunOnce={handleRunOnce}
+      />
 
       {/* Chart */}
       <TradingViewChart ticker="SPY" />
@@ -146,5 +210,126 @@ function StatusBadge({ status }: { status: string }) {
     <span className={`px-2 py-0.5 rounded text-xs font-medium ${styles[status] || styles.pending}`}>
       {status}
     </span>
+  );
+}
+
+function PipelineCard({
+  pipeline,
+  loading,
+  actionLoading,
+  onStart,
+  onStop,
+  onRunOnce,
+}: {
+  pipeline: PipelineStatus | null;
+  loading: boolean;
+  actionLoading: boolean;
+  onStart: () => void;
+  onStop: () => void;
+  onRunOnce: () => void;
+}) {
+  const isRunning = pipeline?.pipeline?.running ?? false;
+  const lastRun = pipeline?.last_run;
+  const market = pipeline?.market;
+
+  return (
+    <div className="bg-surface-800 rounded-lg border border-surface-700 overflow-hidden">
+      <div className="px-4 py-3 border-b border-surface-700 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <h3 className="text-sm font-semibold">Pipeline</h3>
+          <span
+            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+              isRunning
+                ? "bg-emerald-900/30 text-emerald-400"
+                : "bg-surface-700 text-surface-200"
+            }`}
+          >
+            <span
+              className={`w-2 h-2 rounded-full ${
+                isRunning ? "bg-emerald-400 animate-pulse" : "bg-gray-500"
+              }`}
+            />
+            {isRunning ? "Running" : "Stopped"}
+          </span>
+          {market && (
+            <span
+              className={`px-2 py-0.5 rounded text-xs font-medium ${
+                market.is_open
+                  ? "bg-blue-900/30 text-blue-400"
+                  : "bg-amber-900/30 text-amber-400"
+              }`}
+            >
+              Market: {market.is_open ? "Open" : "Closed"}
+              {!market.is_open && ` (${market.reason.replace(/_/g, " ")})`}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onRunOnce}
+            disabled={actionLoading}
+            className="px-3 py-1.5 text-xs rounded-md bg-surface-700 hover:bg-surface-600 text-surface-100 disabled:opacity-50 transition-colors"
+            title="Run pipeline once (manual trigger)"
+          >
+            Run Once
+          </button>
+          {isRunning ? (
+            <button
+              onClick={onStop}
+              disabled={actionLoading}
+              className="px-3 py-1.5 text-xs rounded-md bg-red-900/30 hover:bg-red-900/50 text-red-400 border border-red-800 disabled:opacity-50 transition-colors"
+            >
+              Stop
+            </button>
+          ) : (
+            <button
+              onClick={onStart}
+              disabled={actionLoading}
+              className="px-3 py-1.5 text-xs rounded-md bg-emerald-900/30 hover:bg-emerald-900/50 text-emerald-400 border border-emerald-800 disabled:opacity-50 transition-colors"
+            >
+              Start
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="p-4">
+        {loading ? (
+          <p className="text-sm text-surface-200">Loading pipeline status...</p>
+        ) : lastRun ? (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div>
+              <p className="text-xs text-surface-200 uppercase">Last Run</p>
+              <p className="font-mono">
+                {lastRun.completed_at
+                  ? new Date(lastRun.completed_at).toLocaleTimeString()
+                  : lastRun.started_at
+                  ? new Date(lastRun.started_at).toLocaleTimeString()
+                  : "—"}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-surface-200 uppercase">Symbols Scanned</p>
+              <p className="font-mono font-bold">{lastRun.symbols_scanned}</p>
+            </div>
+            <div>
+              <p className="text-xs text-surface-200 uppercase">Signals Generated</p>
+              <p className="font-mono font-bold">{lastRun.signals_generated}</p>
+            </div>
+            <div>
+              <p className="text-xs text-surface-200 uppercase">Trades Executed</p>
+              <p className="font-mono font-bold">{lastRun.trades_executed}</p>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-surface-200">No pipeline runs yet. Click "Run Once" or "Start" to begin.</p>
+        )}
+        {lastRun && lastRun.error_count > 0 && (
+          <p className="text-xs text-red-400 mt-2">
+            ⚠️ {lastRun.error_count} error{lastRun.error_count > 1 ? "s" : ""} in last run
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
