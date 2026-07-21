@@ -49,9 +49,34 @@ class Settings:
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
     # -----------------------------------------------------------
-    # Notifications
+    # Notifications — SMTP (Email)
     # -----------------------------------------------------------
-    DISCORD_WEBHOOK: str = os.getenv("DISCORD_WEBHOOK", "")
+    SMTP_HOST: str = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USER: str = os.getenv("SMTP_USER", "")
+    SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
+    SMTP_FROM_EMAIL: str = os.getenv("SMTP_FROM_EMAIL", "alphsight@example.com")
+
+    # -----------------------------------------------------------
+    # Notifications — Discord
+    # -----------------------------------------------------------
+    DISCORD_WEBHOOK_URL: str = os.getenv("DISCORD_WEBHOOK_URL", "")
+
+    # -----------------------------------------------------------
+    # Notifications — Telegram
+    # -----------------------------------------------------------
+    TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    TELEGRAM_CHAT_ID: str = os.getenv("TELEGRAM_CHAT_ID", "")
+
+    # -----------------------------------------------------------
+    # Notifications — Slack
+    # -----------------------------------------------------------
+    SLACK_WEBHOOK_URL: str = os.getenv("SLACK_WEBHOOK_URL", "")
+
+    # -----------------------------------------------------------
+    # Notifications — Active Channels
+    # -----------------------------------------------------------
+    NOTIFICATION_CHANNELS: str = os.getenv("NOTIFICATION_CHANNELS", "discord")
 
     # -----------------------------------------------------------
     # Risk Parameters
