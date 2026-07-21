@@ -65,6 +65,14 @@ class Settings:
     # -----------------------------------------------------------
     SIGNAL_CONFIDENCE_THRESHOLD: float = float(os.getenv("SIGNAL_CONFIDENCE_THRESHOLD", "0.70"))
 
+    # -----------------------------------------------------------
+    # Pipeline / Orchestration
+    # -----------------------------------------------------------
+    PIPELINE_INTERVAL_SECONDS: int = int(os.getenv("PIPELINE_INTERVAL_SECONDS", "300"))
+    SCORE_THRESHOLD: float = float(os.getenv("SCORE_THRESHOLD", "85.0"))
+    AUTO_EXECUTE: bool = os.getenv("AUTO_EXECUTE", "false").lower() == "true"
+    MAX_SYMBOLS_PER_RUN: int = int(os.getenv("MAX_SYMBOLS_PER_RUN", "50"))
+
 
 @lru_cache()
 def get_settings() -> Settings:

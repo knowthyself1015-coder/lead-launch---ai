@@ -87,6 +87,38 @@ export interface Health {
   environment: string;
 }
 
+export interface PipelineStatus {
+  pipeline: {
+    running: boolean;
+  };
+  last_run: {
+    run_id: string;
+    started_at: string | null;
+    completed_at: string | null;
+    status: string | null;
+    symbols_scanned: number;
+    signals_generated: number;
+    trades_executed: number;
+    error_count: number;
+  } | null;
+  market: {
+    is_open: boolean;
+    reason: string;
+    current_time_et: string;
+  };
+}
+
+export interface PipelineRunResult {
+  status: string;
+  run_id: string;
+  started_at: string;
+  completed_at: string | null;
+  symbols_scanned: number;
+  signals_generated: number;
+  trades_executed: number;
+  errors: string[];
+}
+
 // -----------------------------------------------------------
 // API functions
 // -----------------------------------------------------------
@@ -125,5 +157,38 @@ export const api = {
   reports: {
     list: (limit?: number) => request<DailyReport[]>("/reports", { params: { limit } }),
     latest: () => request<DailyReport>("/reports/latest"),
+  },
+
+  pipeline: {
+    status: () => request<PipelineStatus>("/pipeline/status"),
+    start: (intervalSeconds?: number) =>
+      request<{ status: string; message: string }>("/pipeline/start", {
+        method: "POST",
+        params: intervalSeconds ? { interval_seconds: intervalSeconds } : undefined,
+      }),
+    stop: () =>
+      request<{ status: string; message: string }>("/pipeline/stop", {
+        method: "POST",
+      }),
+    runOnce: () =>
+      request<PipelineRunResult>("/pipeline/run-once", {
+        method: "POST",
+      }),
+    history: (limit?: number) =>
+      request<{
+        total: number;
+        runs: Array<{
+          run_id: string;
+          started_at: string;
+          completed_at: string | null;
+          status: string;
+          symbols_scanned: number;
+          signals_generated: number;
+          trades_executed: number;
+          error_count: number;
+          errors: string[];
+        }>;
+      }>("/pipeline/history", { params: { limit } }),
+    marketStatus: () => request<{ is_open: boolean; reason: string; current_time_et: string }>("/pipeline/market-status"),
   },
 };
