@@ -170,6 +170,11 @@ class HealthResponse(BaseModel):
     environment: str
 
 
+class HealthReadyResponse(BaseModel):
+    ready: bool
+    checks: dict[str, str]
+
+
 # -----------------------------------------------------------
 # Scanner
 # -----------------------------------------------------------

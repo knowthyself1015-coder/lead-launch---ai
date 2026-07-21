@@ -7,6 +7,18 @@ from app.engines.decisions import evaluate_signal
 from app.engines.portfolio import get_portfolio_snapshot, sync_positions
 from app.engines.notifications import send_alert, send_trade_alert, send_daily_summary
 from app.engines.reports import generate_daily_report, get_reports
+from app.engines.orchestrator import (
+    Orchestrator,
+    PipelineRun,
+    get_orchestrator,
+    is_market_open,
+    market_status_detail,
+)
+from app.engines.executor import (
+    AlpacaExecutor,
+    AccountInfo,
+    ExecutionResult,
+)
 
 __all__ = [
     "scan_market",
@@ -23,4 +35,12 @@ __all__ = [
     "send_daily_summary",
     "generate_daily_report",
     "get_reports",
+    "Orchestrator",
+    "PipelineRun",
+    "get_orchestrator",
+    "is_market_open",
+    "market_status_detail",
+    "AlpacaExecutor",
+    "AccountInfo",
+    "ExecutionResult",
 ]

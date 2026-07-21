@@ -7,7 +7,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.database import engine, Base
 from app.redis import get_redis, close_redis
-from app.routes import health_router, signals_router, stocks_router, portfolio_router, reports_router, scanner_router
+from app.routes import (
+    health_router, signals_router, stocks_router, portfolio_router,
+    reports_router, scanner_router, pipeline_router,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +19,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Startup and shutdown lifecycle."""
     settings = get_settings()
-    logger.info(f"AlphaSight backend starting — env={settings.ENVIRONMENT}")
+    logger.info("AlphaSight backend starting — env=%s", settings.ENVIRONMENT)
 
     # Create tables on startup (dev convenience; use Alembic migrations in prod)
     async with engine.begin() as conn:
@@ -25,10 +28,26 @@ async def lifespan(app: FastAPI):
     # Warm up Redis connection
     await get_redis()
 
+    # ── Auto-start the pipeline loop ─────────────────────────────
+    if settings.AUTO_START_PIPELINE:
+        from app.engines.orchestrator import get_orchestrator
+        logger.info(
+            "AUTO_START_PIPELINE=TRUE — starting pipeline loop (interval=%ds, "
+            "auto_execute=%s, score_threshold=%s)",
+            settings.PIPELINE_INTERVAL_SECONDS,
+            "ON" if settings.AUTO_EXECUTE else "OFF",
+            settings.SCORE_THRESHOLD,
+        )
+        get_orchestrator().start()
+    else:
+        logger.info("AUTO_START_PIPELINE=FALSE — pipeline must be started manually")
+
     yield
 
     # Shutdown
     logger.info("AlphaSight backend shutting down")
+    from app.engines.orchestrator import get_orchestrator
+    get_orchestrator().stop()
     await close_redis()
     await engine.dispose()
 
@@ -59,6 +78,7 @@ def create_app() -> FastAPI:
     app.include_router(portfolio_router, prefix="/api/v1")
     app.include_router(reports_router, prefix="/api/v1")
     app.include_router(scanner_router, prefix="/api/v1")
+    app.include_router(pipeline_router, prefix="/api/v1")
 
     return app
 
