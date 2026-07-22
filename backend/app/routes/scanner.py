@@ -12,6 +12,7 @@ from app.config import get_settings
 from app.engines.market_data import (
     PolygonProvider,
     AlpacaProvider,
+    FallbackProvider,
     MarketDataProvider,
 )
 from app.engines.scanner import (
@@ -36,14 +37,29 @@ router = APIRouter(prefix="/scanner", tags=["scanner"])
 # ---------------------------------------------------------------------------
 def _get_provider() -> MarketDataProvider:
     """Instantiate the configured market data provider.
-    
-    Prefers Polygon if a key is set, otherwise falls back to Alpaca.
+
+    Prefers Alpaca (real-time quotes on paper accounts) when available.
+    Falls back to Polygon (v2/aggs free-tier compatible) if Alpaca is
+    not configured or fails.  The returned provider is wrapped in a
+    FallbackProvider so individual calls survive a single-provider outage.
     """
     settings = get_settings()
-    if settings.POLYGON_API_KEY:
-        return PolygonProvider()
+    primary: MarketDataProvider | None = None
+    secondary: MarketDataProvider | None = None
+
     if settings.ALPACA_API_KEY:
-        return AlpacaProvider()
+        primary = AlpacaProvider()
+    if settings.POLYGON_API_KEY:
+        secondary = PolygonProvider()
+
+    # If we only have one provider, use it directly.
+    if primary is not None and secondary is not None:
+        return FallbackProvider(primary=primary, secondary=secondary)
+    if primary is not None:
+        return primary
+    if secondary is not None:
+        return secondary
+
     raise HTTPException(
         status_code=500,
         detail="No market data provider configured — set POLYGON_API_KEY or ALPACA_API_KEY",

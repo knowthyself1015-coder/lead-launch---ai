@@ -21,12 +21,20 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     logger.info("AlphaSight backend starting — env=%s", settings.ENVIRONMENT)
 
-    # Create tables on startup (dev convenience; use Alembic migrations in prod)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Create tables on startup (graceful — DB is optional for paper trading)
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("Database connected and tables ready")
+    except Exception:
+        logger.warning("Database unavailable — running without persistence (paper mode OK)")
 
-    # Warm up Redis connection
-    await get_redis()
+    # Warm up Redis connection (graceful)
+    try:
+        await get_redis()
+        logger.info("Redis connected")
+    except Exception:
+        logger.warning("Redis unavailable — running without cache")
 
     # ── Auto-start the pipeline loop ─────────────────────────────
     if settings.AUTO_START_PIPELINE:
@@ -46,10 +54,19 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("AlphaSight backend shutting down")
-    from app.engines.orchestrator import get_orchestrator
-    get_orchestrator().stop()
-    await close_redis()
-    await engine.dispose()
+    try:
+        from app.engines.orchestrator import get_orchestrator
+        get_orchestrator().stop()
+    except Exception:
+        pass
+    try:
+        await close_redis()
+    except Exception:
+        pass
+    try:
+        await engine.dispose()
+    except Exception:
+        pass
 
 
 def create_app() -> FastAPI:

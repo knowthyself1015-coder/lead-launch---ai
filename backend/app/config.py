@@ -70,7 +70,7 @@ class Settings:
     # -----------------------------------------------------------
     AUTO_EXECUTE: bool = os.getenv("AUTO_EXECUTE", "true").lower() in ("1", "true", "yes")
     SCORE_THRESHOLD: int = int(os.getenv("SCORE_THRESHOLD", "85"))
-    PIPELINE_INTERVAL_SECONDS: int = int(os.getenv("PIPELINE_INTERVAL_SECONDS", "300"))
+    PIPELINE_INTERVAL_SECONDS: int = int(os.getenv("PIPELINE_INTERVAL_SECONDS", "120"))
     AUTO_START_PIPELINE: bool = os.getenv("AUTO_START_PIPELINE", "true").lower() in ("1", "true", "yes")
     MAX_SYMBOLS_PER_RUN: int = int(os.getenv("MAX_SYMBOLS_PER_RUN", "50"))
 

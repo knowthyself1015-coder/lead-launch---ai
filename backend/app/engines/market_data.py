@@ -294,28 +294,43 @@ class PolygonProvider(MarketDataProvider):
             self._client = None
 
     # ------------------------------------------------------------------
-    # get_quote
+    # get_quote — uses /v2/aggs/ticker/{symbol}/prev (works on free tier)
     # ------------------------------------------------------------------
     async def get_quote(self, symbol: str) -> Optional[Quote]:
         cache_key = f"polygon:quote:{symbol.upper()}"
 
         async def _fetch():
+            # Polygon free tier does NOT allow /v3/quotes (403).
+            # /v2/aggs/ticker/{symbol}/prev returns the previous day's OHLCV
+            # bar, which we use as the current price signal.
             resp = await _request_with_backoff(
-                self.client, "GET", f"/v3/quotes/{symbol.upper()}"
+                self.client, "GET", f"/v2/aggs/ticker/{symbol.upper()}/prev"
             )
             data = resp.json()
-            if data.get("status") != "OK" or not data.get("results"):
+            results = data.get("results", [])
+            if not results:
                 return None
-            r = data["results"][0]
+            r = results[0]
+            close_price = r.get("c", 0)
+            open_price = r.get("o", close_price)
+            high_price = r.get("h")
+            low_price = r.get("l")
+            vol = r.get("v", 0)
+            change = close_price - open_price
+            change_pct = (change / open_price * 100) if open_price else 0.0
             return Quote(
                 symbol=symbol.upper(),
-                price=r.get("ap") or r.get("bp") or 0,
-                change=0.0,
-                change_pct=0.0,
-                volume=r.get("s", 0),
-                bid=r.get("bp"),
-                ask=r.get("ap"),
-                timestamp=datetime.fromtimestamp(r["t"] / 1e9) if r.get("t") else None,
+                price=close_price,
+                change=round(change, 2),
+                change_pct=round(change_pct, 2),
+                volume=vol,
+                bid=None,
+                ask=None,
+                high=high_price,
+                low=low_price,
+                open=open_price,
+                prev_close=None,
+                timestamp=datetime.fromtimestamp(r["t"] / 1000) if r.get("t") else None,
             )
 
         result = await _cached_or_fetch(cache_key, TTL_QUOTE, _fetch)
@@ -362,7 +377,7 @@ class PolygonProvider(MarketDataProvider):
 
             resp = await _request_with_backoff(
                 self.client, "GET",
-                f"/v2/aggs/ticker/{symbol.upper()}/range/{multiplier}/{timespan}/{start or '2024-01-01'}/{end or datetime.now().strftime('%Y-%m-%d')}",
+                f"/v2/aggs/ticker/{symbol.upper()}/range/{multiplier}/{timespan}/{start or (datetime.now() - timedelta(days=45)).strftime('%Y-%m-%d')}/{end or datetime.now().strftime('%Y-%m-%d')}",
                 params=params,
             )
             data = resp.json()
@@ -634,30 +649,42 @@ class AlpacaProvider(MarketDataProvider):
             self._client = None
 
     # ------------------------------------------------------------------
-    # get_quote
+    # get_quote — uses snapshot for real-time price + daily stats
     # ------------------------------------------------------------------
     async def get_quote(self, symbol: str) -> Optional[Quote]:
         cache_key = f"alpaca:quote:{symbol.upper()}"
 
         async def _fetch():
+            # Use snapshot (single-symbol variant) which carries latestTrade,
+            # dailyBar, and prevDailyBar — all in one call.
             resp = await _request_with_backoff(
-                self.client, "GET", f"/v2/stocks/{symbol.upper()}/quotes/latest"
+                self.client, "GET", f"/v2/stocks/{symbol.upper()}/snapshot"
             )
             data = resp.json()
-            quote_data = data.get("quote", {})
-            if not quote_data:
-                return None
+            latest = data.get("latestTrade", {})
+            daily = data.get("dailyBar", {})
+            prev = data.get("prevDailyBar", {})
+
+            price = latest.get("p", 0) or daily.get("c", 0)
+            prev_close = prev.get("c", 0)
+            change = price - prev_close if prev_close else 0.0
+            change_pct = (change / prev_close * 100) if prev_close else 0.0
+
             return Quote(
                 symbol=symbol.upper(),
-                price=(quote_data.get("ap", 0) + quote_data.get("bp", 0)) / 2 or quote_data.get("ap") or quote_data.get("bp") or 0,
-                change=0.0,
-                change_pct=0.0,
-                volume=0,
-                bid=quote_data.get("bp"),
-                ask=quote_data.get("ap"),
+                price=price,
+                change=round(change, 2),
+                change_pct=round(change_pct, 2),
+                volume=daily.get("v", 0),
+                bid=None,
+                ask=None,
+                high=daily.get("h"),
+                low=daily.get("l"),
+                open=daily.get("o"),
+                prev_close=prev_close,
                 timestamp=datetime.fromisoformat(
-                    quote_data["t"].replace("Z", "+00:00")
-                ) if quote_data.get("t") else None,
+                    latest["t"].replace("Z", "+00:00")
+                ) if latest.get("t") else None,
             )
 
         result = await _cached_or_fetch(cache_key, TTL_QUOTE, _fetch)
@@ -877,6 +904,64 @@ class AlpacaProvider(MarketDataProvider):
         # Alpaca v2 REST does not have a news endpoint.  Return empty list.
         logger.debug("AlpacaProvider.get_news is not supported — returning []")
         return []
+
+
+# ---------------------------------------------------------------------------
+# Fallback provider — tries primary, falls back to secondary
+# ---------------------------------------------------------------------------
+class FallbackProvider(MarketDataProvider):
+    """Wraps two MarketDataProvider instances.  Every call is forwarded to
+    *primary* first; if that raises an exception, *secondary* is tried.
+    Useful so the scanner can prefer Alpaca (real-time) but survive an
+    Alpaca outage by falling back to Polygon.
+    """
+
+    def __init__(self, primary: MarketDataProvider, secondary: MarketDataProvider) -> None:
+        self._primary = primary
+        self._secondary = secondary
+
+    async def _try(self, method_name: str, *args, **kwargs):
+        """Call *method_name* on primary, falling back to secondary on error."""
+        for provider, label in [(self._primary, "primary"), (self._secondary, "secondary")]:
+            try:
+                method = getattr(provider, method_name)
+                return await method(*args, **kwargs)
+            except Exception:
+                logger.warning(
+                    "FallbackProvider: %s.%s failed — %s",
+                    label, method_name,
+                    "trying secondary" if label == "primary" else "giving up",
+                    exc_info=(label == "primary"),
+                )
+                if label == "secondary":
+                    raise
+        return None  # unreachable
+
+    async def get_quote(self, symbol: str) -> Optional[Quote]:
+        return await self._try("get_quote", symbol)
+
+    async def get_bars(self, symbol: str, timeframe: str = "1D",
+                       start: Optional[str] = None, end: Optional[str] = None,
+                       limit: int = 100) -> list[Bar]:
+        return await self._try("get_bars", symbol, timeframe, start, end, limit)
+
+    async def get_top_gainers(self, limit: int = 10) -> list[GainersLosersItem]:
+        return await self._try("get_top_gainers", limit)
+
+    async def get_top_losers(self, limit: int = 10) -> list[GainersLosersItem]:
+        return await self._try("get_top_losers", limit)
+
+    async def get_volume_spikes(self, min_rvol: float = 2.0, limit: int = 20) -> list[VolumeSpikeItem]:
+        return await self._try("get_volume_spikes", min_rvol, limit)
+
+    async def get_unusual_options_activity(self, symbol: str, limit: int = 20) -> list[UnusualOptionsItem]:
+        return await self._try("get_unusual_options_activity", symbol, limit)
+
+    async def get_fundamentals(self, symbol: str) -> Optional[Fundamentals]:
+        return await self._try("get_fundamentals", symbol)
+
+    async def get_news(self, symbol: str, limit: int = 10) -> list[NewsItem]:
+        return await self._try("get_news", symbol, limit)
 
 
 # ---------------------------------------------------------------------------

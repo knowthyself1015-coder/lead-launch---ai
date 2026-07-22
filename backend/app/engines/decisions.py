@@ -35,7 +35,7 @@ async def evaluate_signal(signal: dict, account_equity: float) -> TradeDecision:
     """
     # TODO: Implement full decision pipeline with risk checks
     confidence = signal.get("composite_score", 0.0)
-    if confidence < 0.70:
+    if confidence < 0.45:
         return TradeDecision(
             ticker=signal["ticker"],
             action="skip",

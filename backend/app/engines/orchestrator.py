@@ -129,6 +129,7 @@ class Orchestrator:
         self._task: Optional[asyncio.Task] = None
         self._history: list[PipelineRun] = []
         self._max_history: int = 200
+        self._batch_index: int = 0  # rotates through symbol batches
 
     # ------------------------------------------------------------------
     # Pipeline execution
@@ -148,7 +149,7 @@ class Orchestrator:
 
         try:
             # Late imports to avoid circular dependencies
-            from app.engines.market_data import PolygonProvider
+            from app.engines.market_data import PolygonProvider, AlpacaProvider, FallbackProvider
             from app.engines.scanner import scan_market, SCAN_SYMBOLS
             from app.engines.technicals import analyze_technicals
             from app.engines.sentiment import analyze_sentiment
@@ -159,12 +160,33 @@ class Orchestrator:
             from app.engines.notifications import send_trade_alert
             from app.engines.executor import AlpacaExecutor
 
-            # Cap the symbol universe per config
-            symbols = SCAN_SYMBOLS[: settings.MAX_SYMBOLS_PER_RUN]
+            # Staggered batching — scan 5 symbols per run, rotating through
+            # the full list so all stocks get covered over multiple runs.
+            BATCH_SIZE = 5
+            total = len(SCAN_SYMBOLS)
+            start_idx = self._batch_index % total
+            batch_symbols = []
+            for i in range(min(BATCH_SIZE, total)):
+                batch_symbols.append(SCAN_SYMBOLS[(start_idx + i) % total])
+            self._batch_index = (self._batch_index + BATCH_SIZE) % total
+
+            symbols = batch_symbols
+            logger.info("Batch rotation: run picks %d symbols starting at index %d/%d",
+                        len(symbols), start_idx, total)
 
             # ── Step 1: Scan ──────────────────────────────────────────
             logger.info("[1/8] Scanning %d symbols...", len(symbols))
-            provider = PolygonProvider()
+
+            # Prefer Alpaca (real-time quotes on paper), fall back to Polygon (v2/aggs)
+            if settings.ALPACA_API_KEY and settings.POLYGON_API_KEY:
+                provider = FallbackProvider(primary=AlpacaProvider(), secondary=PolygonProvider())
+            elif settings.ALPACA_API_KEY:
+                provider = AlpacaProvider()
+            elif settings.POLYGON_API_KEY:
+                provider = PolygonProvider()
+            else:
+                raise RuntimeError("No market data provider configured")
+
             scan_results = await scan_market(provider, symbols=symbols)
             run.symbols_scanned = len(symbols)
             logger.info("[1/8] Scan complete — %d results ranked", len(scan_results))
@@ -174,7 +196,7 @@ class Orchestrator:
             technical_scores: dict[str, dict] = {}
             for sr in scan_results[:50]:
                 try:
-                    bars = await provider.get_bars(sr.symbol, timeframe="1D", limit=60)
+                    bars = await provider.get_bars(sr.symbol, timeframe="1D", limit=21)
                     bar_dicts = [
                         {"c": b.close, "h": b.high, "l": b.low, "o": b.open, "v": b.volume}
                         for b in bars
