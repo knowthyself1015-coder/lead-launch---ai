@@ -15,7 +15,6 @@ from typing import Optional
 
 from app.engines.market_data import (
     MarketDataProvider,
-    PolygonProvider,
     ScanResult,
     GainersLosersItem,
     VolumeSpikeItem,
@@ -52,41 +51,15 @@ async def scan_market(
 
     results: list[ScanResult] = []
 
-    # Lazy-initialised Polygon fallback for bars (Alpaca paper tier
-    # may return only today's bar when no date range is given).
-    _polygon_bars: Optional[PolygonProvider] = None
-
-    async def _get_bars(sym: str, primary_bars: list) -> list:
-        """Return *primary_bars* if they have enough history; otherwise
-        try Polygon's /v2/aggs endpoint as a fallback."""
-        if len(primary_bars) >= 15:
-            return primary_bars
-        nonlocal _polygon_bars
-        try:
-            from app.config import get_settings
-            settings = get_settings()
-            if settings.POLYGON_API_KEY:
-                if _polygon_bars is None:
-                    _polygon_bars = PolygonProvider()
-                fallback = await _polygon_bars.get_bars(sym, timeframe="1D", limit=21)
-                if fallback and len(fallback) > len(primary_bars):
-                    logger.debug("scan_market: using Polygon bars for %s (%d bars vs %d)",
-                                 sym, len(fallback), len(primary_bars))
-                    return fallback
-        except Exception:
-            logger.debug("scan_market: Polygon bars fallback failed for %s", sym, exc_info=True)
-        return primary_bars
-
     for sym in symbols:
         try:
             quote = await provider.get_quote(sym)
             if quote is None or quote.price is None or quote.price <= 0:
                 continue
 
-            # Fetch daily bars — 21 days covers SMA50 calc on a best-effort basis
-            # while staying well within Polygon free-tier rate limits (~5 req/min).
-            primary_bars = await provider.get_bars(sym, timeframe="1D", limit=21)
-            bars = await _get_bars(sym, primary_bars)
+            # Fetch daily bars — Alpaca paper tier returns bars from snapshot-based
+            # cache (dailyBar + prevDailyBar accumulated over pipeline runs).
+            bars = await provider.get_bars(sym, timeframe="1D", limit=21)
 
             rsi_14 = _approx_rsi(bars, period=14) if bars else None
             above_sma_50 = _above_sma(bars, period=50, price=quote.price) if bars else None

@@ -23,7 +23,7 @@ async def health_check():
 
 @router.get("/health/ready", response_model=HealthReadyResponse, tags=["system"])
 async def health_ready():
-    """Readiness check — verifies API keys for Alpaca and Polygon work."""
+    """Readiness check — verifies Alpaca API keys work."""
     settings = get_settings()
     checks: dict[str, str] = {}
 
@@ -51,30 +51,6 @@ async def health_ready():
         except Exception as exc:
             logger.warning("Alpaca readiness check failed: %s", exc)
             checks["alpaca"] = "invalid"
-
-    # --- Check Polygon ---
-    if not settings.POLYGON_API_KEY:
-        checks["polygon"] = "missing"
-    else:
-        try:
-            import httpx
-            async with httpx.AsyncClient(
-                base_url=settings.POLYGON_BASE_URL,
-                timeout=httpx.Timeout(10.0),
-            ) as client:
-                resp = await client.get(
-                    "/v3/reference/tickers/AAPL",
-                    params={"apiKey": settings.POLYGON_API_KEY},
-                )
-                if resp.status_code == 200:
-                    checks["polygon"] = "ok"
-                elif resp.status_code == 401 or resp.status_code == 403:
-                    checks["polygon"] = "invalid"
-                else:
-                    checks["polygon"] = f"error_{resp.status_code}"
-        except Exception as exc:
-            logger.warning("Polygon readiness check failed: %s", exc)
-            checks["polygon"] = "invalid"
 
     ready = all(v == "ok" for v in checks.values())
 

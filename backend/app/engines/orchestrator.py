@@ -149,7 +149,7 @@ class Orchestrator:
 
         try:
             # Late imports to avoid circular dependencies
-            from app.engines.market_data import PolygonProvider, AlpacaProvider, FallbackProvider
+            from app.engines.market_data import AlpacaProvider
             from app.engines.scanner import scan_market, SCAN_SYMBOLS
             from app.engines.technicals import analyze_technicals
             from app.engines.sentiment import analyze_sentiment
@@ -177,15 +177,8 @@ class Orchestrator:
             # ── Step 1: Scan ──────────────────────────────────────────
             logger.info("[1/8] Scanning %d symbols...", len(symbols))
 
-            # Prefer Alpaca (real-time quotes on paper), fall back to Polygon (v2/aggs)
-            if settings.ALPACA_API_KEY and settings.POLYGON_API_KEY:
-                provider = FallbackProvider(primary=AlpacaProvider(), secondary=PolygonProvider())
-            elif settings.ALPACA_API_KEY:
-                provider = AlpacaProvider()
-            elif settings.POLYGON_API_KEY:
-                provider = PolygonProvider()
-            else:
-                raise RuntimeError("No market data provider configured")
+            # Alpaca only — no fallback to Polygon
+            provider = AlpacaProvider()
 
             scan_results = await scan_market(provider, symbols=symbols)
             run.symbols_scanned = len(symbols)
@@ -292,7 +285,7 @@ class Orchestrator:
                         current_exposure_pct=current_exposure,
                     )
                     if risk.allowed:
-                        if price > 0:
+                        if decision.action == "buy" and price > 0:
                             stop_price = price * (1 - risk.suggested_stop_pct)
                             qty = calculate_position_size(
                                 account_equity=total_equity,
@@ -301,6 +294,14 @@ class Orchestrator:
                                 max_risk_pct=settings.MAX_PORTFOLIO_RISK_PCT,
                             )
                             decision.quantity = qty
+                        elif decision.action == "sell":
+                            # For sells, use the existing position quantity
+                            pos_data = portfolio_snapshot.get("positions", [])
+                            held = next((p for p in pos_data if p.get("symbol", "").upper() == decision.ticker.upper()), None)
+                            if held:
+                                decision.quantity = int(float(held.get("qty", 0)))
+                            else:
+                                decision.quantity = 0
 
                         if decision.action == "buy":
                             approved_buys.append({
@@ -311,7 +312,7 @@ class Orchestrator:
                                 "take_profit_pct": risk.suggested_target_pct,
                                 "confidence": decision.confidence,
                             })
-                        elif decision.action == "sell":
+                        elif decision.action == "sell" and decision.quantity > 0:
                             approved_sells.append({
                                 "ticker": decision.ticker,
                                 "price": price,

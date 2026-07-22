@@ -693,7 +693,7 @@ class AlpacaProvider(MarketDataProvider):
         return Quote(**result) if isinstance(result, dict) else result
 
     # ------------------------------------------------------------------
-    # get_bars
+    # get_bars — uses snapshot dailyBar + prevDailyBar + file cache
     # ------------------------------------------------------------------
     async def get_bars(
         self,
@@ -703,49 +703,128 @@ class AlpacaProvider(MarketDataProvider):
         end: Optional[str] = None,
         limit: int = 100,
     ) -> list[Bar]:
+        """Return daily bars for *symbol*.
+
+        Alpaca paper tier only returns 1 bar from /v2/stocks/{symbol}/bars.
+        To work around this, we:
+        1. Fetch the snapshot (which gives dailyBar + prevDailyBar)
+        2. Merge into a file-based bar cache keyed by (symbol, date)
+        3. Return up to *limit* cached bars sorted by date.
+
+        Over successive pipeline runs the cache grows to 15+ bars, at which
+        point RSI-14 and SMA calculations become meaningful.
+        """
+        import os as _os
+
         cache_key = f"alpaca:bars:{symbol.upper()}:{timeframe}:{start}:{end}:{limit}"
         ttl = TTL_BARS_INTRADAY if "min" in timeframe.lower() or "hour" in timeframe.lower() else TTL_BARS_DAILY
 
-        # Alpaca uses different timeframe format
-        alpaca_tf = timeframe.replace("min", "Min").replace("H", "Hour").replace("D", "Day")
-        if not alpaca_tf.endswith(("Min", "Hour", "Day")):
-            alpaca_tf = "1Day"
+        # Cache file path — shared across providers so bars accumulate
+        _cache_dir = _os.path.join(_os.path.dirname(__file__), "..", "..", ".cache")
+        _os.makedirs(_cache_dir, exist_ok=True)
+        _cache_path = _os.path.join(_cache_dir, "alpaca_bars.json")
 
         async def _fetch():
-            params: dict[str, Any] = {
-                "timeframe": alpaca_tf,
-                "limit": min(limit, 1000),
-                "adjustment": "all",
-            }
-            if start:
-                params["start"] = start
-            if end:
-                params["end"] = end
+            sym = symbol.upper()
 
-            resp = await _request_with_backoff(
-                self.client, "GET",
-                f"/v2/stocks/{symbol.upper()}/bars",
-                params=params,
-            )
-            data = resp.json()
-            results: list[Bar] = []
-            for r in data.get("bars", []):
+            # 1. Fetch snapshot to get dailyBar + prevDailyBar (only for 1D)
+            bars_by_date: dict[str, dict] = {}
+            if timeframe == "1D":
+                try:
+                    resp = await _request_with_backoff(
+                        self.client, "GET", f"/v2/stocks/{sym}/snapshot"
+                    )
+                    snap = resp.json()
+                    daily = snap.get("dailyBar", {})
+                    prev = snap.get("prevDailyBar", {})
+
+                    for bar_data in [daily, prev]:
+                        t_val = bar_data.get("t")
+                        if t_val and bar_data.get("c") is not None:
+                            date_str = t_val[:10]  # "2026-07-22"
+                            bars_by_date[date_str] = {
+                                "o": bar_data["o"],
+                                "h": bar_data["h"],
+                                "l": bar_data["l"],
+                                "c": bar_data["c"],
+                                "v": bar_data["v"],
+                                "vw": bar_data.get("vw"),
+                            }
+                except Exception:
+                    logger.debug("Snapshot fetch failed for %s — trying bars endpoint", sym)
+
+            # 2. Also try the bars endpoint (gives today's bar if nothing else)
+            try:
+                resp = await _request_with_backoff(
+                    self.client, "GET", f"/v2/stocks/{sym}/bars",
+                    params={"timeframe": "1Day", "limit": 1, "adjustment": "all"},
+                )
+                data = resp.json()
+                for r in data.get("bars", []):
+                    t_val = r.get("t", "")
+                    if t_val:
+                        date_str = t_val[:10]
+                        if date_str not in bars_by_date:
+                            bars_by_date[date_str] = {
+                                "o": r["o"], "h": r["h"], "l": r["l"],
+                                "c": r["c"], "v": r["v"], "vw": r.get("vw"),
+                            }
+            except Exception:
+                logger.debug("Bars endpoint failed for %s", sym)
+
+            # 3. Load existing cache, merge new bars
+            cached: dict[str, dict[str, dict]] = {}
+            try:
+                if _os.path.exists(_cache_path):
+                    with open(_cache_path, "r") as fh:
+                        cached = json.load(fh)
+            except Exception:
+                cached = {}
+
+            if sym not in cached:
+                cached[sym] = {}
+
+            for date_str, bar_data in bars_by_date.items():
+                cached[sym][date_str] = bar_data
+
+            # Prune: keep only last 100 dates per symbol
+            sorted_dates = sorted(cached[sym].keys(), reverse=True)[:100]
+            cached[sym] = {d: cached[sym][d] for d in sorted_dates}
+
+            # Persist
+            try:
+                with open(_cache_path, "w") as fh:
+                    json.dump(cached, fh, default=str)
+            except Exception:
+                pass
+
+            # 4. Return bars sorted ascending, up to *limit*
+            all_dates = sorted(cached[sym].keys())[-limit:]
+            results: list[dict] = []
+            for d in all_dates:
+                bd = cached[sym][d]
                 results.append(Bar(
-                    symbol=symbol.upper(),
-                    timestamp=datetime.fromisoformat(r["t"].replace("Z", "+00:00")),
-                    open=r["o"],
-                    high=r["h"],
-                    low=r["l"],
-                    close=r["c"],
-                    volume=r["v"],
-                    vwap=r.get("vw"),
+                    symbol=sym,
+                    timestamp=datetime.fromisoformat(d + "T00:00:00+00:00"),
+                    open=bd["o"], high=bd["h"], low=bd["l"],
+                    close=bd["c"], volume=int(bd["v"]),
+                    vwap=bd.get("vw"),
                 ))
             return results
 
-        raw = await _cached_or_fetch(cache_key, ttl, _fetch)
-        if isinstance(raw, list) and raw and isinstance(raw[0], dict):
-            return [Bar(**b) for b in raw]
-        return raw
+        try:
+            # Bypass Redis cache — bars accumulate in the file cache;
+            # we always need fresh snapshots to grow the history.
+            raw = await _fetch()
+        except Exception:
+            logger.exception("get_bars failed for %s — returning empty", symbol)
+            return []
+
+        if isinstance(raw, list):
+            if raw and isinstance(raw[0], dict):
+                return [Bar(**b) for b in raw]
+            return raw
+        return []
 
     # ------------------------------------------------------------------
     # get_top_gainers
